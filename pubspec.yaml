@@ -23,3 +23,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+dependency_overrides:
+  image_picker_android: 0.8.10
+  flutter_plugin_android_lifecycle: 2.0.20

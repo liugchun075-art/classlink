@@ -274,37 +274,16 @@ class _StudentPaperScreenState extends State<StudentPaperScreen> {
   void _toast(String msg) => _safe(() => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating)));
 
   Future<void> _askAI(int idx) async {
-    // 检查是否已经获得过AI辅导
-    if (_aiHints[idx] != null && _aiHints[idx]!.isNotEmpty) {
-      _toast('该题已获得 AI 辅导，请参考下方解析，不可重复提问。');
-      return;
-    }
-    
     final img = await _capture(_keys[idx]!);
     if (img == null) return;
     _toast('AI分析中，请稍候...');
     try {
-      final res = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/ai-hint'),
-        headers: {'Content-Type': 'application/json'}, 
-        body: json.encode({
-          'question': widget.questions[idx]['content'] ?? '', 
-          'image': img,
-          'class_code': widget.className  // 添加班级代码
-        })
-      );
+      final res = await http.post(Uri.parse('http://127.0.0.1:8000/api/ai-hint'),headers: {'Content-Type': 'application/json'}, body: json.encode({'question': widget.questions[idx]['content'] ?? '', 'image': img}));
       if (res.statusCode == 200) {
-        final response = json.decode(res.body);
-        if (response['success']) {
-          _safe(() => setState(() => _aiHints[idx] = response['hint']));
-          _toast('✅ AI辅导已送达');
-        } else {
-          _toast(response['hint'] ?? 'AI辅导请求失败');
-        }
+        _safe(() => setState(() => _aiHints[idx] = json.decode(res.body)['hint']));
+        _toast('✅ AI辅导已送达');
       }
-    } catch (e) {
-      _toast('网络连接失败，请稍后重试');
-    }
+    } catch (e) {}
   }
 
   Future<void> _askTeacher(int idx) async {

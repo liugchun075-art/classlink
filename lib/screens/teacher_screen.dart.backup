@@ -29,7 +29,6 @@ class _TeacherScreenState extends State<TeacherScreen> {
   final List<StudentAsk> _studentAsks = [];
   final Map<String, bool> _repliedStatus = {};
   bool _isUploading = false;
-  bool _isAiEnabled = true;  // AI开关状态，默认开启
 
   @override
   void initState() {
@@ -84,30 +83,6 @@ class _TeacherScreenState extends State<TeacherScreen> {
         title: Text('${widget.className}班 - 教师控制台'),
         backgroundColor: Colors.indigo,
         actions: [
-          // AI开关按钮
-          IconButton(
-            icon: Icon(_isAiEnabled ? Icons.psychology : Icons.psychology_outlined, 
-                color: _isAiEnabled ? Colors.greenAccent : Colors.redAccent),
-            tooltip: _isAiEnabled ? 'AI辅导已开启（点击禁用）' : 'AI辅导已禁用（点击开启）',
-            onPressed: () async {
-              final newState = !_isAiEnabled;
-              try {
-                final res = await http.post(Uri.parse('http://127.0.0.1:8000/api/toggle-ai?class_code=${widget.className}&enabled=$newState'));
-                if (json.decode(res.body)['success']) {
-                  setState(() => _isAiEnabled = newState);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(newState ? '已允许学生使用 AI 辅导' : '已禁止学生使用 AI 辅导'),
-                    backgroundColor: newState ? Colors.green : Colors.red,
-                  ));
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('AI开关操作失败，请检查网络连接'),
-                  backgroundColor: Colors.orange,
-                ));
-              }
-            },
-          ),
           if (_isUploading) Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: Colors.white)),
         ],
       ),
