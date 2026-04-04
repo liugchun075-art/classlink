@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'dart:ui' as ui;
+import 'dart:html' as html;
 import 'dart:convert';
 import '../services/websocket_service.dart';
 import 'package:signature/signature.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 
 class TeacherScreen extends StatefulWidget {
@@ -29,7 +29,6 @@ class _TeacherScreenState extends State<TeacherScreen> {
   final List<StudentAsk> _studentAsks = [];
   final Map<String, bool> _repliedStatus = {};
   bool _isUploading = false;
-  bool _isAiEnabled = true;  // AI开关状态，默认开启
 
   @override
   void initState() {
@@ -64,17 +63,36 @@ class _TeacherScreenState extends State<TeacherScreen> {
     );
   }
 
-  Future<void> _upload(ImageSource source) async {
-    final file = await ImagePicker().pickImage(source: source);
-    if (file == null) return;
+  // Web 文件选择上传
+  Future<void> _uploadPaper() async {
+    final input = html.FileUploadInputElement();
+    input.accept = 'image/*';
+    input.click();
+    input.onChange.listen((e) async {
+      if (input.files!.isEmpty) return;
+      final file = input.files!.first;
+      final reader = html.FileReader();
+      reader.readAsArrayBuffer(file);
+      reader.onLoadEnd.listen((e) async {
+        final bytes = reader.result as List<int>;
+        await _uploadBytes(bytes, file.name);
+      });
+    });
+  }
+
+  Future<void> _uploadBytes(List<int> bytes, String filename) async {
     setState(() => _isUploading = true);
     try {
       final req = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:8000/api/analyze-paper?class_code=${widget.className}'));
-      req.files.add(http.MultipartFile.fromBytes('file', await file.readAsBytes(), filename: 'paper.jpg'));
+      req.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
       final res = await req.send();
       final data = json.decode(await res.stream.bytesToString());
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['success'] ? '✅ 试卷下发成功！' : '❌ 上传失败')));
-    } catch (e) {} finally { setState(() => _isUploading = false); }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('上传失败：$e')));
+    } finally {
+      setState(() => _isUploading = false);
+    }
   }
 
   @override
@@ -84,30 +102,6 @@ class _TeacherScreenState extends State<TeacherScreen> {
         title: Text('${widget.className}班 - 教师控制台'),
         backgroundColor: Colors.indigo,
         actions: [
-          // AI开关按钮
-          IconButton(
-            icon: Icon(_isAiEnabled ? Icons.psychology : Icons.psychology_outlined, 
-                color: _isAiEnabled ? Colors.greenAccent : Colors.redAccent),
-            tooltip: _isAiEnabled ? 'AI辅导已开启（点击禁用）' : 'AI辅导已禁用（点击开启）',
-            onPressed: () async {
-              final newState = !_isAiEnabled;
-              try {
-                final res = await http.post(Uri.parse('http://127.0.0.1:8000/api/toggle-ai?class_code=${widget.className}&enabled=$newState'));
-                if (json.decode(res.body)['success']) {
-                  setState(() => _isAiEnabled = newState);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(newState ? '已允许学生使用 AI 辅导' : '已禁止学生使用 AI 辅导'),
-                    backgroundColor: newState ? Colors.green : Colors.red,
-                  ));
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('AI开关操作失败，请检查网络连接'),
-                  backgroundColor: Colors.orange,
-                ));
-              }
-            },
-          ),
           if (_isUploading) Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: Colors.white)),
         ],
       ),
@@ -123,37 +117,19 @@ class _TeacherScreenState extends State<TeacherScreen> {
                   Text('请先上传试卷，学生才能开始作答', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
                   SizedBox(height: 40),
                   
-                  // 【修复】：高对比度、极其清晰的上传按钮
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () => _upload(ImageSource.gallery),
-                        icon: Icon(Icons.photo_library), 
-                        label: Text('相册选图'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white, 
-                          foregroundColor: Colors.indigo,
-                          elevation: 2,
-                          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
-                        ),
-                      ),
-                      SizedBox(width: 20),
-                      ElevatedButton.icon(
-                        onPressed: () => _upload(ImageSource.camera),
-                        icon: Icon(Icons.camera_alt), 
-                        label: Text('拍照试卷'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo, // 深蓝底
-                          foregroundColor: Colors.white,  // 纯白字
-                          elevation: 4,
-                          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
-                        ),
-                      ),
-                    ],
-                  )
+                  // 上传按钮
+                  ElevatedButton.icon(
+                    onPressed: _uploadPaper,
+                    icon: Icon(Icons.upload_file), 
+                    label: Text('上传试卷图片'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                    ),
+                  ),
                 ],
               ),
             )
@@ -248,9 +224,7 @@ class __TeacherAnnotationWidgetState extends State<_TeacherAnnotationWidget> {
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // 底图：学生发来的原图
                         Image.memory(base64.decode(widget.studentImageBase64), fit: BoxFit.contain),
-                        // 顶层：红笔画板
                         Positioned.fill(child: Signature(controller: _sigCtrl, backgroundColor: Colors.transparent)),
                       ],
                     ),
